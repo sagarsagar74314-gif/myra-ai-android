@@ -1,0 +1,206 @@
+package com.sagar.myra
+
+import android.app.Activity
+import android.os.Bundle
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
+import android.widget.*
+import android.view.ViewGroup
+import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.Date
+
+class MainActivity : Activity(), TextToSpeech.OnInitListener {
+
+    private lateinit var tts: TextToSpeech
+    private lateinit var output: TextView
+    private lateinit var input: EditText
+
+    private val voiceRequest = 101
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        tts = TextToSpeech(this, this)
+
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.setPadding(28, 40, 28, 28)
+
+        val title = TextView(this)
+        title.text = "MYRA AI"
+        title.textSize = 30f
+        title.setPadding(0, 10, 0, 25)
+
+        output = TextView(this)
+        output.text = "नमस्ते! मैं Myra हूँ। मुझे बताइए क्या करना है?"
+        output.textSize = 18f
+        output.setPadding(0, 15, 0, 25)
+
+        input = EditText(this)
+        input.hint = "यहाँ अपना निर्देश लिखें"
+
+        val send = Button(this)
+        send.text = "भेजें"
+
+        val speak = Button(this)
+        speak.text = "🎤 बोलकर बताएं"
+
+        layout.addView(title)
+        layout.addView(output)
+        layout.addView(input)
+        layout.addView(send)
+        layout.addView(speak)
+
+        setContentView(layout)
+
+        send.setOnClickListener {
+            val command = input.text.toString().trim()
+            if (command.isNotEmpty()) {
+                handleCommand(command)
+                input.text.clear()
+            }
+        }
+
+        speak.setOnClickListener {
+            startVoiceInput()
+        }
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts.language = Locale("hi", "IN")
+            speakText("नमस्ते! मैं मायरा हूँ।")
+        }
+    }
+
+    private fun startVoiceInput() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+        intent.putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+        )
+        intent.putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE,
+            "hi-IN"
+        )
+        intent.putExtra(
+            RecognizerIntent.EXTRA_PROMPT,
+            "मायरा को अपना निर्देश बताइए"
+        )
+
+        try {
+            startActivityForResult(intent, voiceRequest)
+        } catch (e: Exception) {
+            showMessage("आवाज़ पहचानने की सुविधा उपलब्ध नहीं है।")
+        }
+    }
+
+    @Deprecated("Deprecated in Android API")
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?
+    ) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == voiceRequest && resultCode == RESULT_OK) {
+            val results = data?.getStringArrayListExtra(
+                RecognizerIntent.EXTRA_RESULTS
+            )
+
+            val command = results?.firstOrNull()
+
+            if (!command.isNullOrEmpty()) {
+                handleCommand(command)
+            }
+        }
+    }
+
+    private fun handleCommand(command: String) {
+
+        val text = command.lowercase(Locale.ROOT)
+
+        when {
+            text.contains("youtube") || text.contains("यूट्यूब") -> {
+                openWebsite("https://www.youtube.com")
+                reply("YouTube खोल रही हूँ।")
+            }
+
+            text.contains("chrome") || text.contains("क्रोम") -> {
+                openWebsite("https://www.google.com")
+                reply("Google Chrome में वेबसाइट खोलने की कोशिश कर रही हूँ।")
+            }
+
+            text.contains("google") || text.contains("गूगल") -> {
+                openWebsite("https://www.google.com")
+                reply("Google खोल रही हूँ।")
+            }
+
+            text.contains("समय") || text.contains("टाइम") -> {
+                val time = SimpleDateFormat(
+                    "hh:mm a",
+                    Locale.getDefault()
+                ).format(Date())
+
+                reply("अभी समय है $time")
+            }
+
+            text.contains("तारीख") || text.contains("डेट") -> {
+                val date = SimpleDateFormat(
+                    "dd MMMM yyyy",
+                    Locale("hi", "IN")
+                ).format(Date())
+
+                reply("आज की तारीख है $date")
+            }
+
+            text.contains("नमस्ते") || text.contains("hello") -> {
+                reply("नमस्ते! बताइए, मैं आपकी क्या मदद करूँ?")
+            }
+
+            else -> {
+                reply("मैंने आपका निर्देश सुना: $command। इस काम की सुविधा अभी मेरे शुरुआती वर्ज़न में नहीं है।")
+            }
+        }
+    }
+
+    private fun openWebsite(url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW)
+            intent.data = android.net.Uri.parse(url)
+            startActivity(intent)
+        } catch (e: Exception) {
+            showMessage("यह वेबसाइट नहीं खुल पाई।")
+        }
+    }
+
+    private fun reply(message: String) {
+        showMessage(message)
+        speakText(message)
+    }
+
+    private fun showMessage(message: String) {
+        output.text = message
+    }
+
+    private fun speakText(message: String) {
+        if (::tts.isInitialized) {
+            tts.speak(
+                message,
+                TextToSpeech.QUEUE_FLUSH,
+                null,
+                "MYRA_SPEECH"
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        if (::tts.isInitialized) {
+            tts.stop()
+            tts.shutdown()
+        }
+        super.onDestroy()
+    }
+}
